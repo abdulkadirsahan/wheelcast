@@ -270,7 +270,7 @@
 (() => {
 "use strict";
 const API = "https://api.squeekchain.com/v1";
-const Q = new URLSearchParams(location.search);
+const Q = new URLSearchParams(window.__WC_QS || location.search);
 const CFG = {
   w: Q.get("w") || "all",
   channel: (Q.get("channel") || "").replace(/^#/, "").toLowerCase().trim(),
@@ -317,7 +317,7 @@ const SFX = {
 };
 
 // ---------- live data ----------
-const S = { status: null, settle: null, spinning: null, lastRound: null, sessStartMm: null, ok: false };
+const S = { status: null, settle: null, spinning: null, anchor: null, last: null, sessStartMm: null, ok: false };
 async function getJSON(path) {
   const c = new AbortController(); const t = setTimeout(() => c.abort(), 10000);
   try { const r = await fetch(API + path, { signal: c.signal, cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); }
@@ -342,19 +342,25 @@ function onStatus() {
   if (S.spinning !== null && v.spinning !== S.spinning) v.spinning ? showAlert(false) : CFG.napAlert && showAlert(true);
   S.spinning = v.spinning;
   if (S.sessStartMm == null && v.distMm) S.sessStartMm = v.distMm;
+  // Rounds close every 10 minutes. Rounds with no work never appear in /settlements, so follow the settled-round
+  // counter in /status and read each round's work and blocks from the change in the settled totals.
+  const an = (S.status.builder && S.status.builder.anchor) || {};
+  const cur = { round: Number(an.settledThroughRound || 0), work: Number(an.cumulativeWork || 0), block: Number(an.blockHeight || 0) };
+  if (cur.round) {
+    if (S.anchor && cur.round > S.anchor.round) onRounds(S.anchor, cur);
+    if (!S.anchor || cur.round >= S.anchor.round) S.anchor = cur;
+  }
   renderGauge(v); renderTicker();
 }
-function onSettle() {
-  const st = S.settle; if (!st || !Array.isArray(st.recentSettlements) || !st.recentSettlements.length) return;
-  const round = Number(st.recentSettlements[0].settledThroughRound);
-  if (S.lastRound !== null && round > S.lastRound)
-    st.recentSettlements.filter((x) => Number(x.settledThroughRound) > S.lastRound).reverse().forEach(onRound);
-  S.lastRound = round; renderTicker();
-}
-function onRound(x) {
-  const work = Number(x.workAdded || 0), blocks = Number(x.completedBlockCount || 0);
-  resolvePoll(work > 0, x);
-  if (blocks > 0) showBlock({ last: Number(x.lastCompletedBlock || x.blockHeight || 0), count: blocks, sqk: Number(x.sqkMintedBaseUnits || 0) / 1e18, round: x.settledThroughRound });
+function onSettle() { renderTicker(); }
+function onRounds(prev, cur) {
+  const work = Math.max(0, cur.work - prev.work), blocks = Math.max(0, cur.block - prev.block);
+  S.last = { round: cur.round, work };
+  resolvePoll(work > 0, { settledThroughRound: cur.round, workAdded: work });
+  if (blocks > 0) {
+    const x = S.settle && Array.isArray(S.settle.recentSettlements) && S.settle.recentSettlements.find((r) => Number(r.settledThroughRound) === cur.round);
+    showBlock({ last: cur.block, count: blocks, sqk: x ? Number(x.sqkMintedBaseUnits || 0) / 1e18 : 0, round: cur.round });
+  }
 }
 
 // shrink a line of display type until it fits its box (fonts differ between machines)
@@ -439,19 +445,17 @@ function renderTicker() {
     it.push(`Last 24 hours: <b>${fmt(st.summary.workAdded)}</b> work and <b>${fmt(st.summary.completedBlockCount)}</b> blocks`);
     const minted = (st.buckets || []).reduce((a, b) => a + Number(b.sqkMintedBaseUnits || 0) / 1e18, 0);
     if (minted) it.push(`<b>${fmt(minted)} SQK</b> minted in 24 hours`);
-    const x = st.recentSettlements && st.recentSettlements[0];
-    if (x) it.push(`Round ${x.settledThroughRound} settled with <b>${fmt(x.workAdded)}</b> work`);
+    if (S.last) it.push(S.last.work ? `Round ${S.last.round} settled with <b>${fmt(S.last.work)}</b> work` : `Round ${S.last.round} settled quiet: he napped`);
   }
   if (CFG.channel) it.push(`Call the next round in chat with <b>!run</b> or <b>!nap</b>`);
   const html = it.map((t) => `<span>${t}</span>`).join("");
   if (html !== tkKey) { tkKey = html; const el = $("tkInner"); el.innerHTML = html; el.style.setProperty("--tdur", Math.max(28, it.length * 8) + "s"); }
 }
 
-// ---------- round clock (rounds close every 10 minutes) ----------
+// ---------- round clock (rounds close on every 10-minute boundary) ----------
 setInterval(() => {
-  const x = S.settle && S.settle.recentSettlements && S.settle.recentSettlements[0];
-  let txt = "–:––";
-  if (x) { const left = Math.max(0, Date.parse(x.blockTimestamp) + 600000 - Date.now()); txt = left ? `${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}` : "0:00"; }
+  const now = Date.now(), left = Math.ceil((now + 1) / 600000) * 600000 - now;
+  const txt = `${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}`;
   $("tkClock").textContent = txt; if (P.phase === "open") $("clock").textContent = txt;
 }, 1000);
 
@@ -532,22 +536,21 @@ window.addEventListener("message", (e) => {
   if (d.ev === "resolve") resolvePoll(Math.random() < .6, { settledThroughRound: 512, workAdded: 431 });
 });
 function demo() {
-  let dist = 6589390, block = 1999, rnd = 503, spin = false, t = 0;
+  let dist = 6589390, block = 1999, rnd = 503, work = 18553, spin = false, t = 0;
   const mk = () => ({ measurement: { coreStatus: spin ? "SPINNING" : "IDLE", rpmMilli: spin ? 38000 + Math.random() * 30000 : 0, speedMmPerSecond: spin ? 290 + Math.random() * 90 : 0, distanceMm: dist },
-                      builder: { projected: { blockHeight: String(block), blockProgress: String(Math.floor(Math.random() * 1e9)) } } });
+                      builder: { anchor: { settledThroughRound: String(rnd), cumulativeWork: String(work), blockHeight: String(block) },
+                                 projected: { blockHeight: String(block), blockProgress: String(Math.floor(Math.random() * 1e9)) } } });
   S.ok = true; S.status = mk();
-  S.settle = { summary: { workAdded: "7505", completedBlockCount: "859" }, buckets: [{ sqkMintedBaseUnits: "1550668835404647537719582" }],
-               recentSettlements: [{ settledThroughRound: String(rnd), workAdded: "435", blockTimestamp: new Date(Date.now() - 260000).toISOString() }] };
-  S.lastRound = rnd; onStatus(); renderTicker();
+  S.settle = { summary: { workAdded: "7505", completedBlockCount: "859" }, buckets: [{ sqkMintedBaseUnits: "1550668835404647537719582" }], recentSettlements: [] };
+  onStatus(); renderTicker();
   NAMES.slice(0, 6).forEach((u, i) => chat(u, i % 3 ? "!run" : "!nap"));
   setInterval(() => {
     t++; if (t % 12 === 2) spin = !spin;
     if (spin) dist += 1800;
     if (t % 5 === 0) chat(NAMES[t % NAMES.length] + t, Math.random() < .6 ? "!run" : "!nap");
     if (t === 7 || t % 15 === 0) {
-      rnd++; const blocks = spin || t === 7 ? 6 : 0; block += blocks;
-      S.settle.recentSettlements.unshift({ settledThroughRound: String(rnd), workAdded: String(blocks ? 312 : 0), completedBlockCount: String(blocks), lastCompletedBlock: String(block), sqkMintedBaseUnits: "235172524800704839843728", blockTimestamp: new Date().toISOString() });
-      onSettle();
+      rnd++; const w = spin || t === 7 ? 312 : 0, b = w ? 6 : 0; work += w; block += b;
+      S.settle.recentSettlements.unshift({ settledThroughRound: String(rnd), workAdded: String(w), sqkMintedBaseUnits: "235172524800704839843728" });
     }
     S.status = mk(); onStatus();
   }, 2000);

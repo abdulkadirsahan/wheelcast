@@ -246,10 +246,21 @@ $("list").innerHTML = SRC.map((s) => `
 
 // program monitor
 let frame = null;
-function mount() {
+// Some hosts forbid framing their pages (frame-ancestors 'none'), so the monitor loads the overlay's HTML
+// and renders it inline with srcdoc; opened from disk (no fetch), it falls back to a normal frame.
+let overlaySrc = null;
+async function loadOverlay() {
+  if (overlaySrc !== null) return overlaySrc;
+  try { const r = await fetch("overlay.html", { cache: "no-store" }); overlaySrc = r.ok ? await r.text() : ""; } catch (e) { overlaySrc = ""; }
+  return overlaySrc;
+}
+async function mount() {
   const scr = $("screen"); if (frame) frame.remove();
   frame = document.createElement("iframe"); frame.width = 1920; frame.height = 1080; frame.title = "Program monitor"; frame.allow = "autoplay";
-  frame.src = base + "?" + q({ w: "all", demo: "1", sound: st.sound && $("sound").checked ? "1" : "0", bg: "stage" });
+  const qs = q({ w: "all", demo: "1", sound: st.sound && $("sound").checked ? "1" : "0", bg: "stage" });
+  const html = await loadOverlay();
+  if (html) frame.srcdoc = html.replace("<head>", `<head><base href="${base}"><script>window.__WC_QS=${JSON.stringify("?" + qs)}<\/script>`);
+  else frame.src = base + "?" + qs;
   frame.addEventListener("load", () => st.onAir.size < SRC.length && SRC.forEach((s) => send({ ev: "show", id: s.id, on: st.onAir.has(s.id) })));
   scr.appendChild(frame); fit();
 }

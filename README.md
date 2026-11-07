@@ -1,60 +1,50 @@
-# Wheelcast 🐹📺
+# Wheelcast
 
-**Stream overlays powered by Squeektoshi's live wheel.** Free, no login, no keys, no server.
+**Broadcast graphics for a hamster.** Five free OBS overlays that react to Squeektoshi's wheel and the Squeekchain rounds in real time. No login, no keys, no server.
 
-Wheelcast turns [Squeekchain](https://squeekchain.com)'s live API into OBS browser sources. When Squeektoshi hops on his wheel, your stream knows. When the chain mines blocks, your chat celebrates. Viewers predict what he does next, and the real round on Sepolia decides who was right.
+Open the site, set your Twitch channel and look, copy a link, add it to OBS as a Browser source. The settings page has a live program monitor running on demo data, with buttons to take each overlay on or off air and to fire every event.
 
 ## Overlays
 
 | Overlay | What it does | OBS size |
 |---|---|---|
-| 🔴 Run alert | Animated banner with Squeektoshi spinning his wheel the moment he starts running (`IDLE → SPINNING`). Optional nap alert. Synthesised squeak sound. | 800 × 220 |
-| 🎛️ Live RPM gauge | Speedometer following his real wheel RPM, speed in m/s, distance run during your stream, current Squeek block. | 360 × 290 |
-| ⛏️ Block celebration | Confetti and a mining banner whenever a settlement completes new Squeek blocks, with SQK minted and the round number. | 1920 × 1080 |
-| 🗳️ Chat prediction | Viewers type `!run` or `!nap` in Twitch chat. When the next 10-minute round settles, the outcome is read from the chain (work added > 0 = he ran). Winners build streaks; top 3 streaks get a podium. | 380 × 330 |
-| 📰 Stats ticker | Lower-third scrolling status, RPM, block progress, distance this stream, 24h work, blocks and SQK minted. | 1920 × 56 |
+| Run alert | A broadcast wedge wipes in and Squeektoshi leaps out of it the moment the wheel sensor reports he is running (`coreStatus` IDLE → SPINNING), with his live rpm and the next block. Optional nap alert. | 800 × 220 |
+| Wheel telemetry | F1-style rev lights that climb from green to red with his real rpm, plus speed in m/s, distance run during your stream and the current Squeek block. | 400 × 230 |
+| Block banner | A full-width banner with copper sparks whenever a settled round completes Squeek blocks, with the SQK minted and the round number. | 1920 × 1080 |
+| Chat calls | Viewers type `!run` or `!nap` in Twitch chat. When the next 10-minute round settles on Sepolia, the board stamps the result (work added > 0 = he ran) and keeps everyone's streak; the top three streaks are listed. | 400 × 330 |
+| Ticker | A lower third with a live tally, a crawl of wheel and chain stats, and a clock counting down to the next round. | 1920 × 60 |
 
 `overlay.html?w=all` shows every overlay laid out for a 1920 × 1080 scene.
 
-## Use it
-
-1. Open `index.html` (the settings page), enter your Twitch channel, pick a theme, size and sound.
-2. Click **Copy OBS link** under an overlay.
-3. OBS → Sources → **+** → **Browser**, paste the link, set the size from the card. Tick *Control audio via OBS* for the sounds.
-
-The settings page shows live previews with demo data and has test buttons for every event.
-
-### URL parameters (`overlay.html`)
+### Link options (`overlay.html`)
 
 | Param | Values | Default |
 |---|---|---|
 | `w` | `alert`, `gauge`, `block`, `poll`, `ticker`, `all` | `all` |
-| `channel` | Twitch channel name (enables chat votes) | none |
-| `theme` | `night`, `light`, `mint` | `night` |
+| `channel` | Twitch channel name (turns on chat calls) | none |
+| `theme` | `broadcast`, `copper`, `daylight` | `broadcast` |
 | `scale` | 0.3 – 3 | 1 |
 | `sound` | `0` to mute | on |
-| `nap` | `1` to also alert when he stops | off |
-| `secs` | alert duration, 4 – 30 | 9 |
+| `nap` | `1` to also announce naps | off |
+| `secs` | how long the run alert stays, 4 – 30 | 9 |
 | `demo` | `1` simulates a running hamster, chat and blocks | off |
 
-## Data used
+## How it uses Squeekchain
 
-All from `https://api.squeekchain.com/v1` (public, CORS-enabled), polled from the viewer's OBS:
+Everything is read from Squeekchain's public API (`https://api.squeekchain.com/v1`) by the streamer's own OBS:
 
-- `/status` every 5 s: `measurement.coreStatus`, `rpmMilli`, `speedMmPerSecond`, `distanceMm`; `builder.projected.blockHeight`, `blockProgress`; `builder.anchor.settledThroughRound`.
-- `/settlements?range=24h` every 30 s: `recentSettlements` (new rounds → block celebrations and poll results, using `workAdded`, `completedBlockCount`, `lastCompletedBlock`, `sqkMintedBaseUnits`) and `summary` / `buckets` for the ticker.
+- `/status` every 5 seconds: `measurement.coreStatus`, `rpmMilli`, `speedMmPerSecond`, `distanceMm`; `builder.projected.blockHeight` and `blockProgress`.
+- `/settlements?range=24h` every 30 seconds: new entries in `recentSettlements` trigger block banners and settle chat calls (`workAdded`, `completedBlockCount`, `lastCompletedBlock`, `sqkMintedBaseUnits`, `settledThroughRound`); `summary` and `buckets` feed the ticker.
 
-Twitch chat is read anonymously over Twitch's public IRC WebSocket (`justinfan` read-only login). Wheelcast never posts and never asks for a token. Streaks are stored in the OBS browser's localStorage per channel.
+Twitch chat is read anonymously over Twitch's public IRC WebSocket (read-only `justinfan` login). Wheelcast never posts and never asks for a token. Prediction streaks are stored in the OBS browser's localStorage, per channel. Sounds are synthesised in the browser, so there are no audio files.
 
 Squeektoshi's wheel time is never forced or encouraged; naps are part of the show.
 
-## Art
+## Files
 
-The hamster and the wheel are original illustrations made with Google Gemini, cut out and optimised to WebP.
-
-## Squeekchain Genesis verification
-
-<!-- Paste the repository line Squeekchain gives you below this comment -->
+- `index.html`: the settings page and program monitor
+- `overlay.html`: all five overlays (one file, picked with `?w=`)
+- `assets/`: the hamster and wheel artwork (original, made with Google Gemini)
 
 ## Author
 
