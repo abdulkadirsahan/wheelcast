@@ -36,7 +36,7 @@ Everything is read from Squeekchain's public API (`https://api.squeekchain.com/v
 - `/status` every 5 seconds: `measurement.coreStatus`, `rpmMilli`, `speedMmPerSecond`, `distanceMm`; `builder.projected.blockHeight` and `blockProgress`.
 - `/settlements?range=24h` every 30 seconds: new entries in `recentSettlements` trigger block banners and settle chat calls (`workAdded`, `completedBlockCount`, `lastCompletedBlock`, `sqkMintedBaseUnits`, `settledThroughRound`); `summary` and `buckets` feed the ticker.
 
-Twitch chat is read anonymously over Twitch's public IRC WebSocket (read-only `justinfan` login). Wheelcast never posts and never asks for a token. Prediction streaks are stored in the OBS browser's localStorage, per channel. Sounds are synthesised in the browser, so there are no audio files.
+Twitch chat is read anonymously over Twitch's public IRC WebSocket (read-only `justinfan` login). Wheelcast never posts and never asks for a token. Prediction streaks are stored in the OBS browser's localStorage, per channel; demo mode never writes to them, and test commands are only accepted by the demo monitor. The Barlow typeface is loaded from Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`); everything else stays between the overlay, Squeekchain's API and Twitch. Sounds are synthesised in the browser, so there are no audio files.
 
 Squeektoshi's wheel time is never forced or encouraged; naps are part of the show.
 

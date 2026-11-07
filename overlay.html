@@ -461,9 +461,9 @@ setInterval(() => {
 
 // ---------- chat prediction ----------
 const P = { votes: new Map(), phase: "open" };
-const BKEY = "wheelcast:board:" + (CFG.channel || "local");
-let board = {}; try { board = JSON.parse(localStorage.getItem(BKEY)) || {}; } catch (e) {}
-const saveBoard = () => { try { localStorage.setItem(BKEY, JSON.stringify(board)); } catch (e) {} };
+const BKEY = CFG.demo ? null : "wheelcast:board:" + (CFG.channel || "local");
+let board = {}; try { if (BKEY) board = JSON.parse(localStorage.getItem(BKEY)) || {}; } catch (e) {}
+const saveBoard = () => { if (!BKEY) return; try { localStorage.setItem(BKEY, JSON.stringify(board)); } catch (e) {} };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function vote(user, pick) {
   if (P.phase !== "open" || !user) return;
@@ -527,6 +527,9 @@ function connectTwitch() {
 // ---------- test hooks for the Wheelcast page ----------
 const NAMES = ["wheelwatcher", "seedcollector", "napqueen", "cagecam", "rimrider", "pouchgang", "hamhodler", "midnightzoom"];
 window.addEventListener("message", (e) => {
+  // Test commands drive the demo monitor on the Wheelcast page only. A live overlay ignores them,
+  // so no other page can fire alerts or settle a round.
+  if (!CFG.demo || (window.parent === window ? e.source !== window : e.source !== window.parent)) return;
   const d = e.data || {}; if (d.wheelcast !== "test") return;
   if (d.ev === "show" && $(d.id)) { $(d.id).classList.toggle("hidden", !d.on); return; }
   if (d.ev === "start") showAlert(false);
